@@ -324,7 +324,7 @@ sub GetContacts {
         map { x(join ":", @$_) } @$Props,
       ),
     ),
-    Depth => 'infinity',
+    Depth => '1',
   );
 
   my (@Contacts, @Errors);
