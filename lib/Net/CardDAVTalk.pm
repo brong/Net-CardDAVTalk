@@ -184,6 +184,7 @@ sub GetAddressBooks {
       my $isReadOnly = (grep { exists $_->{"{$NS_D}write-content"} } @{$Perms || []}) ? 0 : 1;
 
       my %AddressBook = (
+        href       => $HRef,
         path       => $Path,
         name       => ($Propstat->{"{$NS_D}prop"}{"{$NS_D}displayname"}{content} || ''),
         isReadOnly => $isReadOnly,
