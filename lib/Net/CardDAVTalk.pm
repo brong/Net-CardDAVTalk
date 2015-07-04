@@ -62,7 +62,7 @@ sub new {
   my $Self = $Class->SUPER::new(%Params);
 
   $Self->ns(C => 'urn:ietf:params:xml:ns:carddav');
-  $Self->ns(M => 'http://messagingengine.com/ns/cardsync');
+  #$Self->ns(M => 'http://messagingengine.com/ns/cardsync');
 
   return $Self;
 }
