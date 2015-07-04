@@ -34,8 +34,9 @@ sub new {
 sub new_fromstring {
   my $Proto = shift;
   my $Class = ref($Proto) || $Proto;
+  my $Data = shift;
 
-  my $Parsed = eval { vcard2hash(shift, multival => [ qw(n adr org) ]) };
+  my $Parsed = eval { vcard2hash($Data, multival => [ qw(n adr org) ]) };
 
   my $Self = $Parsed->{objects}->[0];
   if ($Self->{type} ne 'vcard') {
@@ -46,6 +47,8 @@ sub new_fromstring {
   bless $Self, $Class;
 
   $Self->Normalise();
+
+  $Self->{_raw} = $Data;
 
   return $Self;
 }
@@ -74,8 +77,9 @@ sub new_fromfile {
 
 sub as_string {
   my $Self = shift;
-
-  return eval { hash2vcard({ objects => [ $Self ] }) };
+  delete $Self->{_raw};
+  $Self->{_raw} = eval { hash2vcard({ objects => [ $Self ] }) };
+  return $Self->{_raw};
 }
 
 sub uid {
