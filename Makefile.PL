@@ -19,6 +19,7 @@ WriteMakefile(
     },
     PREREQ_PM => {
         'List::Pairwise'    => '1.00',
+	'Net::DAVTalk'	    => 0,
         #'ABC'              => 1.6,
         #'Foo::Bar::Module' => 5.0401,
     },
