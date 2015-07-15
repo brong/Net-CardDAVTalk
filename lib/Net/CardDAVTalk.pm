@@ -289,6 +289,9 @@ sub GetContactAndProps {
         map { x(join ":", @$_) } @$Props,
       ),
     ),
+    x('C:filter',
+      x('C:prop-filter', { name => 'FN' }),
+    ),
     Depth => '0',
   );
 
@@ -322,6 +325,9 @@ sub GetContacts {
         x('D:getetag'),
         x('C:address-data'),
         map { x(join ":", @$_) } @$Props,
+      ),
+      x('C:filter',
+        x('C:prop-filter', { name => 'FN' }),
       ),
     ),
     Depth => '1',
