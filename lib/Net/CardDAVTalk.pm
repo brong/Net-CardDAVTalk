@@ -279,6 +279,12 @@ sub GetContactAndProps {
 
   $CPath || confess "Get contact path not specified";
 
+  my @extra;
+  push @extra,
+      x('C:filter',
+        x('C:prop-filter', { name => 'FN' }),
+      ) if $Self->{is_google};
+
   my $Response = $Self->Request(
     'REPORT',
     $CPath,
@@ -288,9 +294,7 @@ sub GetContactAndProps {
         x('C:address-data'),
         map { x(join ":", @$_) } @$Props,
       ),
-    ),
-    x('C:filter',
-      x('C:prop-filter', { name => 'FN' }),
+      @extra,
     ),
     Depth => '0',
   );
@@ -317,6 +321,12 @@ sub GetContacts {
   my ($Self, $Path, $Props, %Args) = @_;
   $Props //= [];
 
+  my @extra;
+  push @extra,
+      x('C:filter',
+        x('C:prop-filter', { name => 'FN' }),
+      ) if $Self->{is_google};
+
   my $Response = $Self->Request(
     'REPORT',
     "$Path/",
@@ -326,9 +336,7 @@ sub GetContacts {
         x('C:address-data'),
         map { x(join ":", @$_) } @$Props,
       ),
-      x('C:filter',
-        x('C:prop-filter', { name => 'FN' }),
-      ),
+      @extra,
     ),
     Depth => '1',
   );
