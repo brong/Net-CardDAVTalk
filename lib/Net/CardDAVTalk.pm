@@ -333,7 +333,7 @@ sub GetContacts {
   foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
     my $HRef = $Response->{"{$NS_D}href"}{content};
     next unless $HRef;
-    my $type = $Response->{"{$NS_D}getcontenttype"}{content};
+    my $type = $Response->{"{$NS_D}prop"}{"{$NS_D}getcontenttype"}{content};
     next unless $type =~ m{text/(x-)?vcard};
     push @Urls, $HRef;
   }
