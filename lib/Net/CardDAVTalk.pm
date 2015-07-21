@@ -279,22 +279,16 @@ sub GetContactAndProps {
 
   $CPath || confess "Get contact path not specified";
 
-  my @extra;
-  push @extra,
-      x('C:filter',
-        x('C:prop-filter', { name => 'FN' }),
-      ) if $Self->{is_google};
-
   my $Response = $Self->Request(
     'REPORT',
     $CPath,
-    x('C:addressbook-query', $Self->NS(),
+    x('C:addressbook-multiget', $Self->NS(),
       x('D:prop',
         x('D:getetag'),
         x('C:address-data'),
         map { x(join ":", @$_) } @$Props,
       ),
-      @extra,
+      x('D:href', $CPath),
     ),
     Depth => '0',
   );
@@ -321,38 +315,57 @@ sub GetContacts {
   my ($Self, $Path, $Props, %Args) = @_;
   $Props //= [];
 
-  my @extra;
-  push @extra,
-      x('C:filter',
-        x('C:prop-filter', { name => 'FN' }),
-      ) if $Self->{is_google};
-
   my $Response = $Self->Request(
-    'REPORT',
+    'PROPFIND',
     "$Path/",
-    x('C:addressbook-query', $Self->NS(),
+    x('D:propfind', $Self->NS(),
       x('D:prop',
+        x('D:getcontenttype'),
         x('D:getetag'),
-        x('C:address-data'),
-        map { x(join ":", @$_) } @$Props,
       ),
-      @extra,
     ),
     Depth => '1',
   );
 
-  my (@Contacts, @Errors);
-
+  my @Urls;
   my $NS_C = $Self->ns('C');
   my $NS_D = $Self->ns('D');
   foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
-    foreach my $Propstat (@{$Response->{"{$NS_D}propstat"} || []}) {
-      my $VCard = eval { $Self->ParseReportData($Response, $Propstat, $Props) } || do {
-        push @Errors, $@ if $@;
-        next;
-      };
+    my $HRef = $Response->{"{$NS_D}href"}{content};
+    next unless $HRef;
+    my $type = $Response->{"{$NS_D}getcontenttype"}{content};
+    next unless $type =~ m{text/(x-)?vcard};
+    push @Urls, $HRef;
+  }
 
-      push @Contacts, $VCard;
+  my (@Contacts, @Errors);
+
+  if (@Urls) {
+    my $Response = $Self->Request(
+      'REPORT',
+      "$Path/",
+      x('C:addressbook-multiget', $Self->NS(),
+        x('D:prop',
+          x('D:getetag'),
+          x('C:address-data'),
+          map { x(join ":", @$_) } @$Props,
+        ),
+        map { x('D:href', $_) } @Urls,
+      ),
+      Depth => '0',
+    );
+
+    my $NS_C = $Self->ns('C');
+    my $NS_D = $Self->ns('D');
+    foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
+      foreach my $Propstat (@{$Response->{"{$NS_D}propstat"} || []}) {
+        my $VCard = eval { $Self->ParseReportData($Response, $Propstat, $Props) } || do {
+          push @Errors, $@ if $@;
+          next;
+        };
+
+        push @Contacts, $VCard;
+      }
     }
   }
 
