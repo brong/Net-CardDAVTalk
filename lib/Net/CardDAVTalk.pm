@@ -17,40 +17,38 @@ use Data::Dumper;
 
 =head1 NAME
 
-Net::CardDAVTalk - The great new Net::CardDAVTalk!
+Net::CardDAVTalk - A library for talking to CardDAV servers
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 
 =head1 SYNOPSIS
 
-Quick summary of what the module does.
-
-Perhaps a little code snippet.
+This module maps from CardDAV to an old version of the FastMail API.
+It's mostly useful as an example of how to talk CardDAV and for the
+Cyrus IMAP test suite Cassandane.
 
     use Net::CardDAVTalk;
 
     my $foo = Net::CardDAVTalk->new();
     ...
 
-=head1 EXPORT
-
-A list of functions that can be exported.  You can delete this section
-if you don't export anything, such as for a purely object-oriented module.
-
 =head1 SUBROUTINES/METHODS
 
-=head2 function1
+=head2 $class->new()
+
+Takes the same arguments as Net::DAVTalk and adds the single
+namespace:
+
+    C => 'urn:ietf:params:xml:ns:carddav'
 
 =cut
-
-# General methods
 
 sub new {
   my ($Class, %Params) = @_;
@@ -68,6 +66,18 @@ sub new {
 }
 
 # Address book methods {{{
+
+=head2 $self->NewAddressBook($Path, %Args)
+
+Creates a new addressbook collection.  Requires the full
+path (unlike Net::CalDAVTalk, which creates paths by UUID)
+and takes a single argument, the name:
+
+e.g.
+
+    $CardDAV->NewAddressBook("Default", name => "Addressbook");
+
+=cut
 
 sub NewAddressBook {
   my ($Self, $Path, %Args) = @_;
@@ -93,6 +103,16 @@ sub NewAddressBook {
   return $Path;
 }
 
+=head2 $self->DeleteAddressBook($Path)
+
+Deletes the addressbook at the given path
+
+e.g.
+
+    $CardDAV->DeleteAddressBook("Shared");
+
+=cut
+
 sub DeleteAddressBook {
   my ($Self, $Path) = @_;
 
@@ -105,6 +125,17 @@ sub DeleteAddressBook {
 
   return 1;
 }
+
+=head2 $self->UpdateAddressBook($Path, %Args)
+
+Like 'new', but for an existing addressbook.  For now, can only change
+the name.
+
+e.g.
+
+    $CardDAV->UpdateAddressBook("Default", name => "My Happy Addressbook");
+
+=cut
 
 sub UpdateAddressBook {
   my ($Self, $Path, %Args) = @_;
@@ -134,6 +165,17 @@ sub UpdateAddressBook {
   return 1;
 }
 
+=head2 $self->GetAddressBook($Path, %Args)
+
+Calls 'GetAddressBooks' with the args, and greps for the one with the
+matching path.
+
+e.g.
+
+    my $AB = $CardDAV->GetAddressBook("Default");
+
+=cut
+
 sub GetAddressBook {
   my ($Self, $Id, %Args) = @_;
 
@@ -144,6 +186,23 @@ sub GetAddressBook {
 
   return $AddressBook;
 }
+
+=head2 $self->GetAddressBooks(%Args)
+
+Get all the addressbooks on the server.  If the arg 'Sync' is true,
+also requests the DAV:sync-token and returns it as syncToken in the
+addressbook hash.
+
+Returns an arrayref of hashrefs
+
+e.g.
+
+    my $ABs = $CardDAV->GetAddressBooks(Sync => 1);
+    foreach my $AB (@$ABs) {
+        say "$AB->{path}: $AB->{name}";
+    }
+
+=cut
 
 sub GetAddressBooks {
   my ($Self, %Args) = @_;
@@ -174,7 +233,7 @@ sub GetAddressBooks {
   foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
     my $HRef = $Response->{"{$NS_D}href"}{content}
       || next;
-    my $Path = $Self->unrequest_url($HRef);
+    my $Path = $Self->_unrequest_url($HRef);
 
     foreach my $Propstat (@{$Response->{"{$NS_D}propstat"} || []}) {
       next unless $Propstat->{"{$NS_D}prop"}{"{$NS_D}resourcetype"}{"{$NS_C}addressbook"};
@@ -203,6 +262,18 @@ sub GetAddressBooks {
 
 # Contact methods {{{
 
+=head2 $Self->NewContact($AddressBookPath, $VCard)
+
+Create a new contact from the Net::CardDAVTalk::VCard object,
+either using its uid field or generating a new UUID and appending
+.vcf for the filename.
+
+Returns the full path to the card.
+
+NOTE: can also be used for a kind: group v4 style group.
+
+=cut
+
 sub NewContact {
   my ($Self, $Path, $VCard) = @_;
 
@@ -222,6 +293,12 @@ sub NewContact {
   return $VCard->{CPath} = "$Path/$Uid.vcf";
 }
 
+=head2 $self->DeleteContact($Path)
+
+Delete the contact at path $Path.
+
+=cut
+
 sub DeleteContact {
   my ($Self, $CPath) = @_;
 
@@ -234,6 +311,16 @@ sub DeleteContact {
 
   return $CPath;
 }
+
+=head2 $Self->UpdateContact($Path, $VCard)
+
+Identical to NewContact, but will fail unless there is an
+existing contact with that path.  Also takes the full path
+instead of just the addressbook path.
+
+NOTE: can also be used for a kind: group v4 style group.
+
+=cut
 
 sub UpdateContact {
   my ($Self, $CPath, $VCard) = @_;
@@ -251,6 +338,13 @@ sub UpdateContact {
 
   return $VCard->{CPath} = $CPath;
 }
+
+=head2 $Self->GetContact($Path)
+
+Fetch a specific contact by path.  Returns a
+Net::CardDAVTalk::VCard object.
+
+=cut
 
 sub GetContact {
   my ($Self, $CPath) = @_;
@@ -272,6 +366,16 @@ sub GetContact {
 
   return $VCard;
 }
+
+=head2 $Self->GetContactAndProps($Path, $Props)
+
+Use a multiget to fetch the properties in the arrayref as well
+as the card content.
+
+Returns the card in scalar context - the card and an array of errors
+in list context.
+
+=cut
 
 sub GetContactAndProps {
   my ($Self, $CPath, $Props) = @_;
@@ -299,7 +403,7 @@ sub GetContactAndProps {
   my $NS_D = $Self->ns('D');
   foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
     foreach my $Propstat (@{$Response->{"{$NS_D}propstat"} || []}) {
-      my $VCard = eval { $Self->ParseReportData($Response, $Propstat, $Props) } || do {
+      my $VCard = eval { $Self->_ParseReportData($Response, $Propstat, $Props) } || do {
         push @Errors, $@ if $@;
         next;
       };
@@ -310,6 +414,16 @@ sub GetContactAndProps {
 
   return wantarray ? ($Contact, \@Errors) : $Contact;
 }
+
+=head2 $self->GetContacts($Path, $Props, %Args)
+
+Get multiple cards, possibly including props, using both a propfind
+AND a multiget.
+
+Returns an arrayref of contact and an arrayref of errors (or just the
+contacts in scalar context again)
+
+=cut
 
 sub GetContacts {
   my ($Self, $Path, $Props, %Args) = @_;
@@ -361,7 +475,7 @@ sub GetContacts {
     my $NS_D = $Self->ns('D');
     foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
       foreach my $Propstat (@{$Response->{"{$NS_D}propstat"} || []}) {
-        my $VCard = eval { $Self->ParseReportData($Response, $Propstat, $Props) } || do {
+        my $VCard = eval { $Self->_ParseReportData($Response, $Propstat, $Props) } || do {
           push @Errors, $@ if $@;
           next;
         };
@@ -373,6 +487,16 @@ sub GetContacts {
 
   return wantarray ? (\@Contacts, \@Errors) : \@Contacts;
 }
+
+=head2 $self->SyncContacts($Path, $Props, %Args)
+
+uses the argument 'syncToken' to find newly added and removed
+cards from the server.  Returns just the added/changed contacts
+in scalar context, or a list of array of contacts, array of
+removed, array of errors and the new syncToken as 4 items in
+list context.
+
+=cut
 
 sub SyncContacts {
   my ($Self, $Path, $Props, %Args) = @_;
@@ -407,7 +531,7 @@ sub SyncContacts {
   foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
     my $HRef = $Response->{"{$NS_D}href"}{content}
       || next;
-    my $CPath = $Self->unrequest_url($HRef);
+    my $CPath = $Self->_unrequest_url($HRef);
 
     # For members that have been removed, the DAV:response MUST
     # contain one DAV:status with a value set to '404 Not Found' and
@@ -431,7 +555,7 @@ sub SyncContacts {
       my $Status = $Propstat->{"{$NS_D}status"}{content};
 
       if ($Status =~ m/ 200 /) {
-        my $VCard = eval { $Self->ParseReportData($Response, $Propstat, $Props) } || do {
+        my $VCard = eval { $Self->_ParseReportData($Response, $Propstat, $Props) } || do {
           push @Errors, $@ if $@;
           next;
         };
@@ -454,6 +578,13 @@ sub SyncContacts {
   return wantarray ? (\@Contacts, \@Removed, \@Errors, $SyncToken) : \@Contacts;
 }
 
+=head2 $self->MoveContact($Path, $NewPath)
+
+Move a contact to a new path (usually in a new addressbook) - both
+paths are card paths.
+
+=cut
+
 sub MoveContact {
   my ($Self, $CPath, $NewPath) = @_;
 
@@ -472,7 +603,7 @@ sub MoveContact {
 
 # }}}
 
-sub ParseReportData {
+sub _ParseReportData {
   my ($Self, $Response, $Propstat, $Props) = @_;
 
   my $NS_C = $Self->ns('C');
@@ -480,7 +611,7 @@ sub ParseReportData {
 
   my $HRef = $Response->{"{$NS_D}href"}{content}
     // return;
-  my $CPath = $Self->unrequest_url($HRef);
+  my $CPath = $Self->_unrequest_url($HRef);
 
   my $Data = $Propstat->{"{$NS_D}prop"}{"{$NS_C}address-data"}{content}
     // return;
@@ -504,7 +635,7 @@ sub ParseReportData {
   return $VCard;
 }
 
-sub unrequest_url {
+sub _unrequest_url {
   my $Self = shift;
   my $Path = shift;
 
@@ -566,7 +697,7 @@ L<http://search.cpan.org/dist/Net-CardDAVTalk/>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2015 Bron Gondwana.
+Copyright 2015 FastMail Pty. Ltd.
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the the Artistic License (2.0). You may obtain a
