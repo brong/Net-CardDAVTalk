@@ -10,7 +10,19 @@ use List::Pairwise qw(mapp);
 use List::MoreUtils qw(all pairwise);
 use Data::Dumper;
 
+=head1 NAME
+
+Net::CardDAVTalk::VCard - A wrapper for VCard files
+
+=head1 SUBROUTINES/METHODS
+
 # Core {{{
+
+=head2 $class->new()
+
+Create a basic VCard object with no fields set
+
+=cut
 
 sub new {
   my $Proto = shift;
@@ -30,6 +42,13 @@ sub new {
 
   return bless $Self, $Class;
 }
+
+=head2 $class->new_fromstring($String)
+
+Create a new object and populate it by parsing the VCard file
+who's contents are given in the string.
+
+=cut
 
 sub new_fromstring {
   my $Proto = shift;
@@ -53,6 +72,12 @@ sub new_fromstring {
   return $Self;
 }
 
+=head2 $class->new_fromfile($File)
+
+Given a filename or filehandle, read and parse a vcard from it.
+
+=cut
+
 sub new_fromfile {
   my $Proto = shift;
   my $Class = ref($Proto) || $Proto;
@@ -75,12 +100,25 @@ sub new_fromfile {
   return $Self;
 }
 
+=head2 $self->as_string()
+
+Return a string representation of the VCard (inverse of
+new_fromstring)
+
+=cut
+
 sub as_string {
   my $Self = shift;
   delete $Self->{_raw};
   $Self->{_raw} = eval { hash2vcard({ objects => [ $Self ] }) };
   return $Self->{_raw};
 }
+
+=head2 $self->uid()
+
+Get or set the uid field of the card.
+
+=cut
 
 sub uid {
   my $Self = shift;
