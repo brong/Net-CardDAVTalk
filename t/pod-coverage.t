@@ -17,4 +17,5 @@ eval "use Pod::Coverage $min_pc";
 plan skip_all => "Pod::Coverage $min_pc required for testing POD coverage"
     if $@;
 
-all_pod_coverage_ok();
+plan tests => 1;
+pod_coverage_ok( "Net::CardDAVTalk", "main module is covered is covered" );
