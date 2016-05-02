@@ -19,9 +19,9 @@ WriteMakefile(
     },
     PREREQ_PM => {
         'List::Pairwise'    => '1.00',
-	'Net::DAVTalk'	    => 0,
-        #'ABC'              => 1.6,
-        #'Foo::Bar::Module' => 5.0401,
+        'XML::Spice'        => '0.04',
+        'Net::DAVTalk'      => '0.08',
+        'Text::VCardFast'   => '0.07',
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'Net-CardDAVTalk-*' },

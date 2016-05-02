@@ -1,5 +1,11 @@
 Revision history for Net-CardDAVTalk
 
+0.03    Tue May  3 09:38 2016
+  - added dependencies to satisfy tests
+
+0.02
+  - added POD
+
 0.01    Date/time
         First version, released on an unsuspecting world.
 
