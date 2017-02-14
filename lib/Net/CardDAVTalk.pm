@@ -11,6 +11,7 @@ use base qw(Net::DAVTalk);
 use Carp;
 use Text::VCardFast qw(vcard2hash);
 use XML::Spice;
+use URI::Escape qw(uri_unescape);
 use Net::CardDAVTalk::VCard;
 use Data::Dumper;
 
@@ -60,7 +61,7 @@ sub new {
   my $Self = $Class->SUPER::new(%Params);
 
   $Self->ns(C => 'urn:ietf:params:xml:ns:carddav');
-  #$Self->ns(M => 'http://messagingengine.com/ns/cardsync');
+  $Self->ns(CY => 'http://cyrusimap.org/ns/');
 
   return $Self;
 }
@@ -220,6 +221,7 @@ sub GetAddressBooks {
         x('D:displayname'),
         x('D:resourcetype'),
         x('D:current-user-privilege-set'),
+        x('D:acl'),
         @props,
       ),
     ),
@@ -230,6 +232,7 @@ sub GetAddressBooks {
 
   my $NS_C = $Self->ns('C');
   my $NS_D = $Self->ns('D');
+  my $NS_CY = $Self->ns('CY');
   foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
     my $HRef = $Response->{"{$NS_D}href"}{content}
       || next;
@@ -240,13 +243,40 @@ sub GetAddressBooks {
 
       # XXX - this is really quite specific and probably wrong-namespaced...
       my $Perms = $Propstat->{"{$NS_D}prop"}{"{$NS_D}current-user-privilege-set"}{"{$NS_D}privilege"};
-      my $isReadOnly = (grep { exists $_->{"{$NS_D}write-content"} } @{$Perms || []}) ? 0 : 1;
+
+      my @ShareWith;
+      my $ace = $Propstat->{"{$NS_D}prop"}{"{$NS_D}acl"}{"{$NS_D}ace"};
+      $ace = [] unless ($ace and ref($ace) eq 'ARRAY');
+      foreach my $Acl (@$ace) {
+        next if $Acl->{"{$NS_D}protected"};  # ignore admin ACLs
+        my $user = uri_unescape($Acl->{"{$NS_D}principal"}{"{$NS_D}href"}{content} // '');
+        next unless $user =~ m{^/dav/principals/user/([^/]+)};
+        my $email = $1;
+        next if $email eq 'admin';
+        my %ShareObject = (
+          email => $email,
+          mayAdmin => $JSON::false,
+          mayWrite => $JSON::false,
+          mayRead => $JSON::false,
+        );
+        foreach my $item (@{$Acl->{"{$NS_D}grant"}{"{$NS_D}privilege"}}) {
+          $ShareObject{'mayAdmin'} = $JSON::true if $item->{"{$NS_CY}admin"};
+          $ShareObject{'mayWrite'} = $JSON::true if $item->{"{$NS_D}write-content"};
+          $ShareObject{'mayRead'} = $JSON::true if $item->{"{$NS_D}read"};
+        }
+
+        push @ShareWith, \%ShareObject;
+      }
 
       my %AddressBook = (
         href       => $HRef,
         path       => $Path,
         name       => ($Propstat->{"{$NS_D}prop"}{"{$NS_D}displayname"}{content} || ''),
-        isReadOnly => $isReadOnly,
+        isReadOnly => (grep { exists $_->{"{$NS_D}write-content"} } @{$Perms || []}) ? $JSON::false : $JSON::true,
+        mayRead    => (grep { exists $_->{"{$NS_D}read"} } @{$Perms || []}) ? $JSON::true : $JSON::false,
+        mayWrite   => (grep { exists $_->{"{$NS_D}write-content"} } @{$Perms || []}) ? $JSON::true : $JSON::false,
+        mayAdmin   => (grep { exists $_->{"{$NS_CY}admin"} } @{$Perms || []}) ? $JSON::true : $JSON::false,
+        shareWith  => (@ShareWith ? \@ShareWith : $JSON::false),
       );
       if ($Args{Sync}) {
         $AddressBook{syncToken} = $Propstat->{"{$NS_D}prop"}{"{$NS_D}sync-token"}{content} || '';
