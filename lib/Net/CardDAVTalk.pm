@@ -28,6 +28,8 @@ Version 0.06
 
 our $VERSION = '0.06';
 
+our $BATCHSIZE = 100;
+
 
 =head1 SYNOPSIS
 
@@ -518,35 +520,37 @@ sub GetContactsMulti {
   my ($Self, $Path, $Urls, $Props) = @_;
   my (@Contacts, @Errors, %ETags);
 
-  my $Response = $Self->Request(
-    'REPORT',
-    "$Path/",
-    x('C:addressbook-multiget', $Self->NS(),
-      x('D:prop',
-        x('D:getetag'),
-        x('C:address-data'),
-        map { x(join ":", @$_) } @$Props,
+  while (my @urls = splice(@$Urls, 0, $BATCHSIZE)) {
+    my $Response = $Self->Request(
+      'REPORT',
+      "$Path/",
+      x('C:addressbook-multiget', $Self->NS(),
+        x('D:prop',
+          x('D:getetag'),
+          x('C:address-data'),
+          map { x(join ":", @$_) } @$Props,
+        ),
+        map { x('D:href', $_) } @urls,
       ),
-      map { x('D:href', $_) } @$Urls,
-    ),
-    Depth => '0',
-  );
+      Depth => '0',
+    );
 
-  my $NS_C = $Self->ns('C');
-  my $NS_D = $Self->ns('D');
-  foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
-    my $href = $Response->{"{$NS_D}href"}{content};
-    next unless $href;
-    foreach my $Propstat (@{$Response->{"{$NS_D}propstat"} || []}) {
-      my $etag = $Propstat->{"{$NS_D}prop"}{"{$NS_D}getetag"}{content} || '';
-      my $VCard = eval { $Self->_ParseReportData($Response, $Propstat, $Props) } || do {
-        push @Errors, $@ if $@;
-        next;
-      };
+    my $NS_C = $Self->ns('C');
+    my $NS_D = $Self->ns('D');
+    foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
+      my $href = $Response->{"{$NS_D}href"}{content};
+      next unless $href;
+      foreach my $Propstat (@{$Response->{"{$NS_D}propstat"} || []}) {
+        my $etag = $Propstat->{"{$NS_D}prop"}{"{$NS_D}getetag"}{content} || '';
+        my $VCard = eval { $Self->_ParseReportData($Response, $Propstat, $Props) } || do {
+          push @Errors, $@ if $@;
+          next;
+        };
 
-      push @Contacts, $VCard;
+        push @Contacts, $VCard;
 
-      $ETags{$href} = $etag;
+        $ETags{$href} = $etag;
+      }
     }
   }
 
