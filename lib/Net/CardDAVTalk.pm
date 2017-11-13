@@ -518,7 +518,7 @@ also fetching \$Props on top of the address-data and getetag.
 
 sub GetContactsMulti {
   my ($Self, $Path, $Urls, $Props) = @_;
-  my (@Contacts, @Errors, %ETags);
+  my (@Contacts, @Errors, %Links);
 
   while (my @urls = splice(@$Urls, 0, $BATCHSIZE)) {
     my $Response = $Self->Request(
@@ -549,12 +549,12 @@ sub GetContactsMulti {
 
         push @Contacts, $VCard;
 
-        $ETags{$href} = $etag;
+        $Links{$href} = $etag;
       }
     }
   }
 
-  return wantarray ? (\@Contacts, \@Errors, \%ETags) : \@Contacts;
+  return wantarray ? (\@Contacts, \@Errors, \%Links) : \@Contacts;
 }
 
 =head2 $self->SyncContacts($Path, $Props, %Args)
@@ -570,14 +570,14 @@ list context.
 sub SyncContacts {
   my ($Self, $Path, $Props, %Args) = @_;
 
-  my ($Links, $Removed, $Errors, $SyncToken) = $Self->SyncContactLinks($Path, %Args);
+  my ($Added, $Removed, $Errors, $SyncToken) = $Self->SyncContactLinks($Path, %Args);
 
-  my @AllUrls = sort keys %$Links;
+  my @AllUrls = sort keys %$Added;
 
-  my ($Contacts, $ThisErrors, $ETags) = $Self->GetContactsMulti($Path, \@AllUrls, $Props);
+  my ($Contacts, $ThisErrors, $Links) = $Self->GetContactsMulti($Path, \@AllUrls, $Props);
   push @$Errors, @$ThisErrors;
 
-  return wantarray ? ($Contacts, $Removed, $Errors, $SyncToken, $ETags) : $Contacts;
+  return wantarray ? ($Contacts, $Removed, $Errors, $SyncToken, $Links) : $Contacts;
 }
 
 =head2 $self->SyncContactLinks($Path, %Args)
