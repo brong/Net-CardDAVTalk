@@ -460,7 +460,6 @@ contacts in scalar context again)
 
 sub GetContacts {
   my ($Self, $Path, $Props) = @_;
-  $Props //= [];
 
   my $data = $Self->GetContactLinks($Path);
   my @AllUrls = sort keys %$data;
@@ -518,6 +517,7 @@ also fetching \$Props on top of the address-data and getetag.
 
 sub GetContactsMulti {
   my ($Self, $Path, $Urls, $Props) = @_;
+  $Props //= [];
   my (@Contacts, @Errors, %Links);
 
   while (my @urls = splice(@$Urls, 0, $BATCHSIZE)) {
