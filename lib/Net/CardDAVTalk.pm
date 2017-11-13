@@ -547,7 +547,6 @@ sub GetContactsMulti {
           next;
         };
 
-        $VCard->{href} = $href;
         push @Contacts, $VCard;
 
         $Links{$href} = $etag;
@@ -704,6 +703,7 @@ sub _ParseReportData {
   return unless $VCard;
 
   $VCard->{CPath} = $CPath;
+  $VCard->{href} = $HRef;
 
   my %Props;
   for (@$Props) {
