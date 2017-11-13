@@ -547,6 +547,7 @@ sub GetContactsMulti {
           next;
         };
 
+        $VCard->{href} = $href;
         push @Contacts, $VCard;
 
         $Links{$href} = $etag;
