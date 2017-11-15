@@ -192,9 +192,7 @@ sub GetAddressBook {
 
 =head2 $self->GetAddressBooks(%Args)
 
-Get all the addressbooks on the server.  If the arg 'Sync' is true,
-also requests the DAV:sync-token and returns it as syncToken in the
-addressbook hash.
+Get all the addressbooks on the server.
 
 Returns an arrayref of hashrefs
 
@@ -210,10 +208,7 @@ e.g.
 sub GetAddressBooks {
   my ($Self, %Args) = @_;
 
-  my @props;
-  if ($Args{Sync}) {
-    push @props, x('D:sync-token');
-  }
+  my $props = $Args{Properties} || [];
 
   my $Response = $Self->Request(
     'PROPFIND',
@@ -224,7 +219,9 @@ sub GetAddressBooks {
         x('D:resourcetype'),
         x('D:current-user-privilege-set'),
         x('D:acl'),
-        @props,
+        x('D:sync-token'),
+        x('D:supported-report-set'),
+        @$props,
       ),
     ),
     Depth => 1,
@@ -245,6 +242,14 @@ sub GetAddressBooks {
 
       # XXX - this is really quite specific and probably wrong-namespaced...
       my $Perms = $Propstat->{"{$NS_D}prop"}{"{$NS_D}current-user-privilege-set"}{"{$NS_D}privilege"};
+
+      my $CanSync;
+      my $Report = $Propstat->{"{$NS_D}prop"}{"{$NS_D}supported-report-set"}{"{$NS_D}supported-report"};
+      $Report = [] unless ($Report and ref($Report) eq 'ARRAY');
+      foreach my $item (@$Report) {
+        # XXX - do we want to check the other things too?
+        $CanSync = 1 if $item->{"{$NS_D}report"}{"{$NS_D}sync-collection"};
+      }
 
       my @ShareWith;
       my $ace = $Propstat->{"{$NS_D}prop"}{"{$NS_D}acl"}{"{$NS_D}ace"};
@@ -279,10 +284,10 @@ sub GetAddressBooks {
         mayWrite   => (grep { exists $_->{"{$NS_D}write-content"} } @{$Perms || []}) ? $JSON::true : $JSON::false,
         mayAdmin   => (grep { exists $_->{"{$NS_CY}admin"} } @{$Perms || []}) ? $JSON::true : $JSON::false,
         shareWith  => (@ShareWith ? \@ShareWith : $JSON::false),
+        syncToken  => $Propstat->{"{$NS_D}prop"}{"{$NS_D}sync-token"}{content} || '',
+        canSync    => $CanSync ? $JSON::true : $JSON::false,
       );
-      if ($Args{Sync}) {
-        $AddressBook{syncToken} = $Propstat->{"{$NS_D}prop"}{"{$NS_D}sync-token"}{content} || '';
-      }
+
       push @AddressBooks, \%AddressBook;
     }
   }
