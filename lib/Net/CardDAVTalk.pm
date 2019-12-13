@@ -654,6 +654,12 @@ sub SyncContactLinks {
         # Missing properties return 404 status response, ignore
 
       }
+      elsif ($Status =~ m/ 418 /) {
+        # Sabredav thinks it's funny to return 418 for missing entries.
+        # What they mean here is that this contact has since been removed.
+        # See https://github.com/sabre-io/dav/pull/734
+        push @Removed, $href;
+      }
       else {
         warn "ODD STATUS";
         push @Errors, "Odd status in propstat response $href: $Status";
