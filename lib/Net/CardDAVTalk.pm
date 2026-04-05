@@ -25,7 +25,7 @@ Version 0.09
 
 =cut
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 our $BATCHSIZE = 100;
 
