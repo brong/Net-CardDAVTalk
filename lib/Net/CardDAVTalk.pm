@@ -464,10 +464,11 @@ contacts in scalar context again)
 sub GetContacts {
   my ($Self, $Path, $Props) = @_;
 
-  my $data = $Self->GetContactLinks($Path);
+  my ($data, $LinkErrors) = $Self->GetContactLinks($Path);
   my @AllUrls = sort keys %$data;
 
   my ($Contacts, $Errors, $HRefs) = $Self->GetContactsMulti($Path, \@AllUrls, $Props);
+  unshift @$Errors, @$LinkErrors;
 
   return wantarray ? ($Contacts, $Errors, $HRefs) : $Contacts;
 }
@@ -475,7 +476,13 @@ sub GetContacts {
 =head2 $self->GetContactLinks($Path)
 
 Returns a hash of href => etag for every contact URL (type: text/(x-)?vcard)
-inside the collection at \$Path.
+inside the collection at \$Path.  Collections (including \$Path itself)
+are skipped.
+
+In list context, also returns an arrayref of errors for any propstat
+responses with an unexpected status.
+
+    my ($Links, $Errors) = $CardDAV->GetContactLinks($Path);
 
 =cut
 
@@ -489,41 +496,48 @@ sub GetContactLinks {
       x('D:prop',
         x('D:getcontenttype'),
         x('D:getetag'),
+        x('D:resourcetype'),
       ),
     ),
     Depth => '1',
   );
 
-  my %response;
+  my (%response, @Errors);
   my $NS_C = $Self->ns('C');
   my $NS_D = $Self->ns('D');
   foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
     my $href = $Response->{"{$NS_D}href"}{content};
     next unless $href;
-    next if !$Response->{"{$NS_D}propstat"} || !@{$Response->{"{$NS_D}propstat"}};
-    foreach my $Propstat (@{$Response->{"{$NS_D}propstat"}}) {
-      my $Status = $Propstat->{"{$NS_D}status"}{content};
+
+    # Gather all the properties the server found, which may be split
+    # across several propstat elements
+    my %Props;
+    foreach my $Propstat (@{$Response->{"{$NS_D}propstat"} || []}) {
+      my $Status = $Propstat->{"{$NS_D}status"}{content} // '';
 
       if ($Status =~ m/ 200 /) {
-        my $Prop = $Propstat->{"{$NS_D}prop"};
-        if ($Prop->{"{$NS_D}getcontenttype"}) {
-          my $type = $Prop->{"{$NS_D}getcontenttype"}{content} || '';
-          next unless $type =~ m{text/(x-)?vcard};
-        }
-        my $etag = $Prop->{"{$NS_D}getetag"}{content} || '';
-        $response{$href} = $etag;
+        %Props = (%Props, %{$Propstat->{"{$NS_D}prop"} || {}});
       }
       elsif ($Status =~ m/ 404 /) {
         # Missing properties return 404 status response, ignore
       }
       else {
-        warn "ODD STATUS";
-        push @{$response{Errors}}, "Odd status in propstat response $href: $Status";
+        push @Errors, "Odd status in propstat response $href: $Status";
       }
     }
+    next unless %Props;
+
+    next if $Props{"{$NS_D}resourcetype"}{"{$NS_D}collection"};
+
+    if ($Props{"{$NS_D}getcontenttype"}) {
+      my $type = $Props{"{$NS_D}getcontenttype"}{content} || '';
+      next unless $type =~ m{text/(x-)?vcard};
+    }
+
+    $response{$href} = $Props{"{$NS_D}getetag"}{content} || '';
   }
 
-  return \%response;
+  return wantarray ? (\%response, \@Errors) : \%response;
 }
 
 =head2 $self->GetContactsMulti($Path, $Urls, $Props)
@@ -642,7 +656,7 @@ sub SyncContactLinks {
     # contain one DAV:status with a value set to '404 Not Found' and
     # MUST NOT contain any DAV:propstat element
     if (!$Response->{"{$NS_D}propstat"}) {
-      my $Status = $Response->{"{$NS_D}status"}{content};
+      my $Status = $Response->{"{$NS_D}status"}{content} // '';
       if ($Status =~ m/ 404 /) {
         push @Removed, $href;
       } else {
@@ -657,7 +671,7 @@ sub SyncContactLinks {
     # least one DAV:propstat element and MUST NOT contain any
     # DAV:status element.
     foreach my $Propstat (@{$Response->{"{$NS_D}propstat"} || []}) {
-      my $Status = $Propstat->{"{$NS_D}status"}{content};
+      my $Status = $Propstat->{"{$NS_D}status"}{content} // '';
 
       if ($Status =~ m/ 200 /) {
         my $etag = $Propstat->{"{$NS_D}prop"}{"{$NS_D}getetag"}{content};
