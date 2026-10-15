@@ -1,6 +1,6 @@
 Revision history for Net-CardDAVTalk
 
-0.13    (unreleased)
+0.13    Thu Oct 15 2026
   - GetContactLinks: parse props inside DAV:propstat, so etags are
     returned and non-vCard resources and collections are skipped
     (Jess Robinson)

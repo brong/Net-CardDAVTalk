@@ -21,11 +21,11 @@ Net::CardDAVTalk - A library for talking to CardDAV servers
 
 =head1 VERSION
 
-Version 0.11
+Version 0.13
 
 =cut
 
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 our $BATCHSIZE = 100;
 
