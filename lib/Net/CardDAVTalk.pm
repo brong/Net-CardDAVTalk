@@ -500,12 +500,27 @@ sub GetContactLinks {
   foreach my $Response (@{$Response->{"{$NS_D}response"} || []}) {
     my $href = $Response->{"{$NS_D}href"}{content};
     next unless $href;
-    if ($Response->{"{$NS_D}prop"}{"{$NS_D}getcontenttype"}) {
-      my $type = $Response->{"{$NS_D}prop"}{"{$NS_D}getcontenttype"}{content} || '';
-      next unless $type =~ m{text/(x-)?vcard};
+    next if !$Response->{"{$NS_D}propstat"} || !@{$Response->{"{$NS_D}propstat"}};
+    foreach my $Propstat (@{$Response->{"{$NS_D}propstat"}}) {
+      my $Status = $Propstat->{"{$NS_D}status"}{content};
+
+      if ($Status =~ m/ 200 /) {
+        my $Prop = $Propstat->{"{$NS_D}prop"};
+        if ($Prop->{"{$NS_D}getcontenttype"}) {
+          my $type = $Prop->{"{$NS_D}getcontenttype"}{content} || '';
+          next unless $type =~ m{text/(x-)?vcard};
+        }
+        my $etag = $Prop->{"{$NS_D}getetag"}{content} || '';
+        $response{$href} = $etag;
+      }
+      elsif ($Status =~ m/ 404 /) {
+        # Missing properties return 404 status response, ignore
+      }
+      else {
+        warn "ODD STATUS";
+        push @{$response{Errors}}, "Odd status in propstat response $href: $Status";
+      }
     }
-    my $etag = $Response->{"{$NS_D}prop"}{"{$NS_D}getetag"}{content} || '';
-    $response{$href} = $etag;
   }
 
   return \%response;
